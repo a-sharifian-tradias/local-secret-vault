@@ -41,3 +41,7 @@ Thumbs.db
 
 # Local backup files
 *.backup-*
+
+# Release build output
+release/
+release-test/
