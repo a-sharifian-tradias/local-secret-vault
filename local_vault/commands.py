@@ -13,7 +13,12 @@ import time
 from pathlib import Path
 from typing import Dict
 
-from local_vault.client import api_request, delete_server_state, is_server_running
+from local_vault.client import (
+    api_request,
+    delete_server_state,
+    is_server_running,
+    read_server_state,
+)
 from local_vault.constants import (
     DEFAULT_HOST,
     SERVER_STATE_FILE,
@@ -47,6 +52,58 @@ def get_server_command() -> list[str]:
         return [sys.executable, "_serve"]
 
     return [sys.executable, str(Path(__file__).resolve().parent.parent / "vault.py"), "_serve"]
+
+
+def _process_is_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+
+    if os.name == "nt":
+        completed = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        output = completed.stdout.strip()
+        return bool(output) and "No tasks are running" not in output and str(pid) in output
+
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+
+    return True
+
+
+def _wait_for_process_exit(pid: int, timeout_seconds: float = 3.0) -> bool:
+    deadline = time.time() + timeout_seconds
+
+    while time.time() < deadline:
+        if not _process_is_running(pid):
+            return True
+        time.sleep(0.1)
+
+    return not _process_is_running(pid)
+
+
+def _force_kill_process(pid: int) -> None:
+    if pid <= 0:
+        return
+
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        return
+
+    try:
+        os.kill(pid, 9)
+    except OSError:
+        pass
 
 
 def command_init(args: argparse.Namespace) -> int:
@@ -204,14 +261,35 @@ def command_unlock(args: argparse.Namespace) -> int:
 
 
 def command_lock(args: argparse.Namespace) -> int:
+    server_pid = None
+
+    try:
+        state = read_server_state()
+        raw_pid = state.get("pid")
+        if isinstance(raw_pid, int):
+            server_pid = raw_pid
+        elif isinstance(raw_pid, str) and raw_pid.isdigit():
+            server_pid = int(raw_pid)
+    except VaultError:
+        pass
+
     try:
         api_request("/lock", {})
-        print("Vault locked.")
-        return 0
     except VaultError:
         delete_server_state()
         print("Vault is locked.")
         return 0
+
+    if server_pid is not None:
+        exited = _wait_for_process_exit(server_pid, timeout_seconds=3.0)
+
+        if not exited:
+            _force_kill_process(server_pid)
+            _wait_for_process_exit(server_pid, timeout_seconds=2.0)
+
+    delete_server_state()
+    print("Vault locked.")
+    return 0
 
 
 def command_status(args: argparse.Namespace) -> int:
