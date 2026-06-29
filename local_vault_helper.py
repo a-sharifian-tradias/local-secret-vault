@@ -107,6 +107,37 @@ def _normalize_secret_request(names: Iterable[str] | Mapping[str, str]) -> dict[
     return mapping
 
 
+def _normalize_suffix(suffix: str) -> str:
+    if not isinstance(suffix, str):
+        raise ValueError("suffix must be a string.")
+
+    normalized = suffix.strip().strip("_").upper()
+
+    if not normalized:
+        raise ValueError("suffix must not be empty.")
+
+    if not normalized.replace("_", "").isalnum():
+        raise ValueError("suffix may only contain letters, numbers, and underscores.")
+
+    return normalized
+
+
+def list_secret_names() -> list[str]:
+    """
+    Return all secret names from the unlocked local vault.
+
+    Secret values are not returned.
+    """
+
+    result = _post_json("/list", {})
+    names = result.get("names", [])
+
+    if not isinstance(names, list):
+        raise LocalVaultError("Vault response did not include a valid names list.")
+
+    return sorted(str(name) for name in names)
+
+
 def load_secrets(names: Iterable[str] | Mapping[str, str], *, override: bool = True) -> None:
     """
     Load secrets from the unlocked local vault into os.environ.
@@ -178,3 +209,53 @@ def load_secret(vault_name: str, *, as_env: str | None = None, override: bool = 
         raise ValueError("as_env must be a non-empty string.")
 
     load_secrets({vault_name: env_name}, override=override)
+
+
+def load_secrets_by_suffix(suffix: str, *, override: bool = True) -> list[str]:
+    """
+    Load all secrets ending with a suffix into os.environ without the suffix.
+
+    Example:
+
+        load_secrets_by_suffix("DEV")
+
+    If the vault contains:
+
+        API_KEY_DEV
+        DATABASE_URL_DEV
+
+    this sets:
+
+        os.environ["API_KEY"]
+        os.environ["DATABASE_URL"]
+
+    Returns the environment variable names that were loaded.
+    """
+
+    normalized_suffix = _normalize_suffix(suffix)
+    suffix_marker = f"_{normalized_suffix}"
+
+    names = list_secret_names()
+
+    mapping: dict[str, str] = {}
+
+    for vault_name in names:
+        if not vault_name.endswith(suffix_marker):
+            continue
+
+        env_name = vault_name[: -len(suffix_marker)]
+
+        if not env_name:
+            continue
+
+        mapping[vault_name] = env_name
+
+    if not mapping:
+        raise LocalVaultMissingSecretError(
+            f"No secrets found ending with {suffix_marker}. "
+            f"Import them with: vault import-env --suffix {normalized_suffix}"
+        )
+
+    load_secrets(mapping, override=override)
+
+    return sorted(mapping.values())
