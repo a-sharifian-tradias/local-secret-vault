@@ -45,3 +45,4 @@ Thumbs.db
 # Release build output
 release/
 release-test/
+*.egg-info/

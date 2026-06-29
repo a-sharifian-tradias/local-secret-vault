@@ -51,7 +51,7 @@ def get_server_command() -> list[str]:
     if getattr(sys, "frozen", False):
         return [sys.executable, "_serve"]
 
-    return [sys.executable, str(Path(__file__).resolve().parent.parent / "vault.py"), "_serve"]
+    return [sys.executable, "-m", "local_vault", "_serve"]
 
 
 def _process_is_running(pid: int) -> bool:

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "localvault"
+version = "0.4.0"
+description = "Local encrypted secrets vault for development workflows."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "cryptography>=42",
+]
+authors = [
+    { name = "Aria Sharifian" }
+]
+keywords = [
+    "secrets",
+    "vault",
+    "env",
+    "environment",
+    "local-development",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Topic :: Software Development",
+]
+
+[project.scripts]
+vault = "local_vault.__main__:main"
+localvault = "local_vault.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "local_vault*",
+    "localsecretvault*",
+]
