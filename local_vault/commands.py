@@ -106,6 +106,66 @@ def _force_kill_process(pid: int) -> None:
         pass
 
 
+def _copy_text_to_clipboard(text: str) -> None:
+    if os.name == "nt":
+        completed = subprocess.run(
+            ["clip"],
+            input=text,
+            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+
+        if completed.returncode != 0:
+            message = completed.stderr.strip() or "Failed to copy to clipboard."
+            raise VaultError(message)
+
+        return
+
+    clipboard_commands = [
+        ["pbcopy"],
+        ["wl-copy"],
+        ["xclip", "-selection", "clipboard"],
+        ["xsel", "--clipboard", "--input"],
+    ]
+
+    for command in clipboard_commands:
+        try:
+            completed = subprocess.run(
+                command,
+                input=text,
+                text=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except FileNotFoundError:
+            continue
+
+        if completed.returncode == 0:
+            return
+
+    raise VaultError("Could not find a supported clipboard command.")
+
+
+def _format_env_value(value: str) -> str:
+    if value == "":
+        return ""
+
+    needs_quotes = (
+        value != value.strip()
+        or "\n" in value
+        or "\r" in value
+        or "#" in value
+        or '"' in value
+        or "'" in value
+    )
+
+    if not needs_quotes:
+        return value
+
+    return json.dumps(value)
+
+
 def command_init(args: argparse.Namespace) -> int:
     ensure_vault_home()
 
@@ -547,6 +607,102 @@ def _strip_affixes(name: str, prefix: str | None, suffix: str | None) -> str:
         env_name = env_name[: -(len(suffix) + 1)]
 
     return env_name
+
+
+def command_export(args: argparse.Namespace) -> int:
+    try:
+        prefix = normalize_name_affix(args.prefix)
+    except VaultError as exc:
+        print(f"Invalid prefix: {exc}")
+        return 1
+
+    try:
+        suffix = normalize_name_affix(args.suffix)
+    except VaultError as exc:
+        print(f"Invalid suffix: {exc}")
+        return 1
+
+    try:
+        list_result = api_request("/list", {})
+    except VaultError as exc:
+        print(str(exc))
+        return 1
+
+    all_names = list_result.get("names", [])
+
+    if not isinstance(all_names, list) or not all(isinstance(name, str) for name in all_names):
+        print("Vault server returned an invalid secret list.")
+        return 1
+
+    selected_names = sorted(
+        name for name in all_names if _name_matches_affixes(name, prefix, suffix)
+    )
+
+    if not selected_names:
+        print("No matching secrets found.")
+        if prefix is not None:
+            print(f"Prefix filter: {prefix}")
+        if suffix is not None:
+            print(f"Suffix filter: {suffix}")
+        return 1
+
+    print(f"This will copy {len(selected_names)} secret value(s) to your clipboard.")
+    print("Save the exported content somewhere else.")
+    print("Secret values will not be printed here.")
+    print()
+    print("Secret names:")
+
+    for name in selected_names:
+        print(name)
+
+    print()
+    confirmation = input("Type EXPORT to copy these secrets to clipboard: ")
+
+    if confirmation != "EXPORT":
+        print("Cancelled.")
+        return 1
+
+    try:
+        get_result = api_request("/get", {"names": selected_names})
+    except VaultError as exc:
+        print(str(exc))
+        return 1
+
+    secrets = get_result.get("secrets", {})
+    missing = get_result.get("missing", [])
+
+    if missing:
+        print("Some selected secrets were missing:")
+        for name in missing:
+            print(name)
+        return 1
+
+    if not isinstance(secrets, dict):
+        print("Vault server returned an invalid secret payload.")
+        return 1
+
+    lines: list[str] = []
+
+    for name in selected_names:
+        value = secrets.get(name)
+
+        if not isinstance(value, str):
+            print(f"Vault server returned an invalid value for: {name}")
+            return 1
+
+        lines.append(f"{name}={_format_env_value(value)}")
+
+    clipboard_text = "\n".join(lines) + "\n"
+
+    try:
+        _copy_text_to_clipboard(clipboard_text)
+    except VaultError as exc:
+        print(str(exc))
+        return 1
+
+    print(f"Copied {len(selected_names)} secret value(s) to clipboard.")
+    print("Paste the exported content somewhere else now.")
+    return 0
 
 
 def command_run(args: argparse.Namespace) -> int:
