@@ -440,3 +440,128 @@ def command_import_env(args: argparse.Namespace) -> int:
         print(name)
 
     return 0
+
+
+def _name_matches_affixes(name: str, prefix: str | None, suffix: str | None) -> bool:
+    if prefix is not None and not name.startswith(f"{prefix}_"):
+        return False
+
+    if suffix is not None and not name.endswith(f"_{suffix}"):
+        return False
+
+    return True
+
+
+def _strip_affixes(name: str, prefix: str | None, suffix: str | None) -> str:
+    env_name = name
+
+    if prefix is not None:
+        env_name = env_name[len(prefix) + 1 :]
+
+    if suffix is not None:
+        env_name = env_name[: -(len(suffix) + 1)]
+
+    return env_name
+
+
+def command_run(args: argparse.Namespace) -> int:
+    command = list(args.command)
+
+    if command and command[0] == "--":
+        command = command[1:]
+
+    if not command:
+        print("Missing command to run.")
+        print("Example: vault run --suffix DEV -- python app.py")
+        return 1
+
+    try:
+        prefix = normalize_name_affix(args.prefix)
+    except VaultError as exc:
+        print(f"Invalid prefix: {exc}")
+        return 1
+
+    try:
+        suffix = normalize_name_affix(args.suffix)
+    except VaultError as exc:
+        print(f"Invalid suffix: {exc}")
+        return 1
+
+    try:
+        list_result = api_request("/list", {})
+    except VaultError as exc:
+        print(str(exc))
+        return 1
+
+    all_names = list_result.get("names", [])
+
+    if not isinstance(all_names, list) or not all(isinstance(name, str) for name in all_names):
+        print("Vault server returned an invalid secret list.")
+        return 1
+
+    selected_names = sorted(
+        name for name in all_names if _name_matches_affixes(name, prefix, suffix)
+    )
+
+    if not selected_names:
+        print("No matching secrets found.")
+        if prefix is not None:
+            print(f"Prefix filter: {prefix}")
+        if suffix is not None:
+            print(f"Suffix filter: {suffix}")
+        return 1
+
+    try:
+        get_result = api_request("/get", {"names": selected_names})
+    except VaultError as exc:
+        print(str(exc))
+        return 1
+
+    secrets = get_result.get("secrets", {})
+    missing = get_result.get("missing", [])
+
+    if missing:
+        print("Some selected secrets were missing:")
+        for name in missing:
+            print(name)
+        return 1
+
+    if not isinstance(secrets, dict):
+        print("Vault server returned an invalid secret payload.")
+        return 1
+
+    env = os.environ.copy()
+    mapped_names: Dict[str, str] = {}
+
+    for vault_name in selected_names:
+        value = secrets.get(vault_name)
+
+        if not isinstance(value, str):
+            print(f"Vault server returned an invalid value for: {vault_name}")
+            return 1
+
+        env_name = _strip_affixes(vault_name, prefix, suffix)
+
+        try:
+            validate_secret_name(env_name)
+        except VaultError as exc:
+            print(f"Invalid environment variable name after prefix/suffix stripping: {env_name}")
+            print(str(exc))
+            return 1
+
+        if env_name in mapped_names:
+            print("Two vault secrets map to the same environment variable:")
+            print(f"{mapped_names[env_name]} -> {env_name}")
+            print(f"{vault_name} -> {env_name}")
+            return 1
+
+        mapped_names[env_name] = vault_name
+        env[env_name] = value
+
+    try:
+        completed = subprocess.run(command, env=env)
+    except FileNotFoundError:
+        print(f"Command not found: {command[0]}")
+        return 127
+
+    return int(completed.returncode)

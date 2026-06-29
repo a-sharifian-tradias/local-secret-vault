@@ -10,6 +10,7 @@ from local_vault.commands import (
     command_list,
     command_lock,
     command_rename,
+    command_run,
     command_set,
     command_status,
     command_unlock,
@@ -71,5 +72,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Overwrite existing secrets with imported values.",
     )
     import_env_parser.set_defaults(func=command_import_env)
+
+    run_parser = subparsers.add_parser("run", help="Run a command with vault secrets in its environment.")
+    run_parser.add_argument("--prefix", help="Only use secrets with this prefix and strip it from env names.")
+    run_parser.add_argument("--suffix", help="Only use secrets with this suffix and strip it from env names.")
+    run_parser.add_argument(
+        "command",
+        nargs=argparse.REMAINDER,
+        help="Command to run after --, for example: -- python app.py",
+    )
+    run_parser.set_defaults(func=command_run)
 
     return parser
