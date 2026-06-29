@@ -20,6 +20,15 @@ from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+from local_vault.constants import (
+    DEFAULT_HOST,
+    KDF_ITERATIONS,
+    KDF_NAME,
+    SERVER_STATE_FILE,
+    VAULT_FILE,
+    VAULT_HOME,
+    VAULT_VERSION,
+)
 from local_vault.env_parser import (
     normalize_name_affix,
     parse_env_lines,
@@ -27,36 +36,8 @@ from local_vault.env_parser import (
     transform_secret_name,
     validate_secret_name,
 )
-
-
-VAULT_HOME = Path(os.environ.get("LOCAL_SECRET_VAULT_HOME", str(Path.home() / ".local-secrets")))
-VAULT_FILE = VAULT_HOME / "vault.json"
-SERVER_STATE_FILE = VAULT_HOME / "server.json"
-
-VAULT_VERSION = 1
-KDF_NAME = "PBKDF2HMAC-SHA256"
-KDF_ITERATIONS = 600_000
-
-DEFAULT_HOST = "127.0.0.1"
-
-
-class VaultError(Exception):
-    pass
-
-
-def utc_now() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
-
-
-def iso_utc(value: dt.datetime) -> str:
-    return value.astimezone(dt.timezone.utc).isoformat()
-
-
-def parse_iso_utc(value: str) -> dt.datetime:
-    parsed = dt.datetime.fromisoformat(value)
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=dt.timezone.utc)
-    return parsed.astimezone(dt.timezone.utc)
+from local_vault.errors import VaultError
+from local_vault.time_utils import iso_utc, parse_iso_utc, utc_now
 
 
 def ensure_vault_home() -> None:
