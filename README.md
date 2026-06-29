@@ -14,6 +14,7 @@ It lets you store secrets locally, unlock them for a limited time, and run comma
 - Import `.env` style content
 - Run commands with secrets injected into the environment
 - Export secrets to clipboard as `.env` text
+- Python helper API for loading secrets into Python apps
 - Windows executable build
 
 ## Recommended Windows setup
@@ -154,6 +155,55 @@ database_url = os.environ["DATABASE_URL"]
 
 Secret values are not printed by the vault.
 
+## Use from Python
+
+You can also use Local Secret Vault from another Python project.
+
+Install the package:
+
+```powershell
+pip install localvault
+```
+
+Then unlock the vault first:
+
+```powershell
+vault unlock --hours 8
+```
+
+In your Python app:
+
+```python
+from localsecretvault import load_secrets
+
+load_secrets(suffix="DEV")
+```
+
+Example mapping:
+
+```text
+API_KEY_DEV -> os.environ["API_KEY"]
+DATABASE_URL_DEV -> os.environ["DATABASE_URL"]
+```
+
+You can also read one secret directly:
+
+```python
+from localsecretvault import get_secret
+
+api_key = get_secret("API_KEY_DEV")
+```
+
+Or list secret names:
+
+```python
+from localsecretvault import list_secret_names
+
+names = list_secret_names(suffix="DEV")
+```
+
+The vault must already be unlocked before using these helpers.
+
 ## Export secrets to clipboard
 
 To copy all secrets to clipboard as `.env` text:
@@ -282,6 +332,7 @@ Most users do not need this.
 - Secrets are decrypted only while the vault is unlocked.
 - While unlocked, secrets are available to the local vault process.
 - `vault run` passes selected secrets only to the command you run.
+- Python helpers load selected secrets into the current Python process.
 - `vault export` copies decrypted secrets to the clipboard.
 - Clipboard content may be visible to other apps while it remains in the clipboard.
 - Lock the vault when finished.
