@@ -42,6 +42,13 @@ def get_free_local_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def get_server_command() -> list[str]:
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "_serve"]
+
+    return [sys.executable, str(Path(__file__).resolve().parent.parent / "vault.py"), "_serve"]
+
+
 def command_init(args: argparse.Namespace) -> int:
     ensure_vault_home()
 
@@ -161,7 +168,7 @@ def command_unlock(args: argparse.Namespace) -> int:
         startupinfo.wShowWindow = 0
 
     process = subprocess.Popen(
-        [sys.executable, str(Path(__file__).resolve().parent.parent / "vault.py"), "_serve"],
+        get_server_command(),
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
