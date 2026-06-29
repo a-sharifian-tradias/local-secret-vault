@@ -1,12 +1,21 @@
-﻿.venv/
+﻿# Python
+.venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
+# Environment files
 .env
 .env.*
+
+# Logs
 *.log
+
+# PyInstaller
+build/
+dist/
+*.spec
 
 # Never commit local encrypted vault runtime or backups
 .local-secrets/
@@ -14,8 +23,10 @@ vault.json
 server.json
 *.vault-backup.json
 
-# Test files
+# Temporary test files
 test_helper.py
+test_*.py
+*_test.py
 
 # IDE files
 .idea/
@@ -24,8 +35,9 @@ test_helper.py
 # Jupyter
 .ipynb_checkpoints/
 
-# Local backups
-*.backup-before-hidden-window-fix
+# OS files
+.DS_Store
+Thumbs.db
 
-# Version backup files
-*.backup-before-v0.2
+# Local backup files
+*.backup-*
