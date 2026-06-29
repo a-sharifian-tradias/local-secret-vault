@@ -1,0 +1,27 @@
+﻿.env
+.env.*
+*.env
+
+# Do not commit local vault/runtime files
+.local-secrets/
+vault.json
+server.json
+*.vault-backup.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
