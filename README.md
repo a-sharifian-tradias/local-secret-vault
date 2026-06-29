@@ -162,7 +162,7 @@ You can also use Local Secret Vault from another Python project.
 Install the package:
 
 ```powershell
-pip install localvault
+pip install localsecretvault
 ```
 
 Then unlock the vault first:
@@ -349,4 +349,24 @@ The built executable will be created at:
 
 ```text
 dist\vault.exe
+```
+
+## Build Python package from source
+
+Install build tools:
+
+```powershell
+python -m pip install build
+```
+
+Build the wheel and source distribution:
+
+```powershell
+python -m build
+```
+
+The Python package files will be created in:
+
+```text
+dist
 ```
